@@ -27,7 +27,7 @@ class Settings(BaseSettings):
     VOLATILITY_EXPOSURE_REDUCTION: float = 0.5
     LOG_LEVEL: str = "INFO"
     ENABLE_AUTOMATION: bool = False
-    CORS_ORIGINS: str = "http://localhost:5173,http://localhost:3000"
+    CORS_ORIGINS: str = "http://localhost:5173,http://localhost:3000,https://etorotradebot.pages.dev,https://etorotradebot.leo-blixt77.workers.dev"
     PORT: int = 8000
 
     model_config = {
