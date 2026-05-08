@@ -23,6 +23,25 @@ class SchedulerService:
             self.scheduler.shutdown(wait=False)
             logger.info("scheduler stopped")
 
+    def schedule_periodic_sync(
+        self, sync_func: Callable, portfolio_id: int, interval_minutes: int = 15
+    ) -> str:
+        job_id = f"sync_{portfolio_id}"
+        if job_id in self._jobs:
+            logger.info("sync job already scheduled", job_id=job_id)
+            return job_id
+        self.scheduler.add_job(
+            sync_func,
+            trigger=IntervalTrigger(minutes=interval_minutes),
+            id=job_id,
+            name=f"Periodic Portfolio Sync - Portfolio {portfolio_id}",
+            replace_existing=True,
+            args=[portfolio_id],
+        )
+        self._jobs[job_id] = f"every_{interval_minutes}_minutes"
+        logger.info("scheduled periodic sync", portfolio_id=portfolio_id, interval=interval_minutes, job_id=job_id)
+        return job_id
+
     def schedule_periodic_analysis(
         self, portfolio_id: int, analysis_func: Callable, interval_minutes: int = 60
     ) -> str:

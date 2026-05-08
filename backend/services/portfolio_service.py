@@ -215,7 +215,12 @@ class PortfolioService:
             logger.error("etoro sync unexpected error", error=str(e))
             return {"status": "error", "message": f"Unexpected error: {str(e)}", "positions_synced": 0, "traders_synced": 0}
 
-        portfolio.total_value = round(account.get("totalValue", 0), 2)
+        total_value = round(account.get("totalValue", 0), 2)
+        if total_value == 0 and not etoro_positions and not mirrors:
+            logger.warning("etoro sync returned empty data — skipping update to preserve existing data")
+            return {"status": "skipped", "message": "Empty API response — existing data preserved", "positions_synced": 0, "traders_synced": 0}
+
+        portfolio.total_value = total_value
         portfolio.cash_balance = round(account.get("cashBalance", 0), 2)
         portfolio.invested_amount = round(account.get("investedAmount", 0), 2)
         portfolio.unrealized_pnl = round(account.get("unrealizedPnl", 0), 2)

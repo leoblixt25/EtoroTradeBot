@@ -48,6 +48,26 @@ async def lifespan(app: FastAPI):
         logger.info("telegram bot not configured — skipping")
 
     portfolio_id = 1
+
+    async def _do_sync(pid: int) -> None:
+        try:
+            from backend.database.db import async_session_factory
+            from backend.services.portfolio_service import PortfolioService
+            async with async_session_factory() as session:
+                svc = PortfolioService(db=session)
+                result = await svc.sync_portfolio(1)
+                await session.commit()
+                logger.info("auto sync completed", portfolio_id=pid, **result)
+        except Exception as e:
+            logger.error("auto sync failed", portfolio_id=pid, error=str(e))
+
+    asyncio.create_task(_do_sync(portfolio_id))
+
+    scheduler_service.schedule_periodic_sync(
+        _do_sync,
+        portfolio_id=portfolio_id,
+        interval_minutes=15,
+    )
     scheduler_service.schedule_periodic_analysis(
         portfolio_id,
         lambda pid: logger.info("periodic analysis", portfolio_id=pid),
