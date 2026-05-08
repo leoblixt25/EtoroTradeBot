@@ -259,6 +259,14 @@ class AiRecommendation(Base):
     portfolio = relationship("Portfolio", back_populates="ai_recommendations")
 
 
+class AppSetting(Base):
+    __tablename__ = "app_settings"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    key: Mapped[str] = mapped_column(String(100), unique=True, nullable=False, index=True)
+    value: Mapped[str] = mapped_column(Text, default="")
+
+
 class AuditLog(Base):
     __tablename__ = "audit_logs"
 

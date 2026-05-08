@@ -27,6 +27,12 @@ limiter = Limiter(key_func=get_remote_address)
 async def lifespan(app: FastAPI):
     logger.info("starting up", app_name=settings.APP_NAME)
     await init_db()
+
+    from backend.database.db import async_session_factory
+    from backend.services.settings_service import load_settings_into_memory
+    async with async_session_factory() as session:
+        await load_settings_into_memory(session)
+
     scheduler_service.start()
 
     if settings.TELEGRAM_BOT_TOKEN:

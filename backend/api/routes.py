@@ -925,39 +925,61 @@ async def get_settings():
 
 
 @router.put("/settings/paper-trading", response_model=SettingsResponse)
-async def update_paper_trading(update: PaperTradingUpdate):
+async def update_paper_trading(
+    update: PaperTradingUpdate,
+    db: AsyncSession = Depends(get_db),
+):
     """Toggle paper trading mode."""
     settings.PAPER_TRADING = update.paper_trading
+    from backend.services.settings_service import save_setting
+    await save_setting(db, "PAPER_TRADING", "true" if update.paper_trading else "false")
     logger.info("paper trading toggled", enabled=settings.PAPER_TRADING)
     return _settings_response()
 
 
 @router.put("/settings/etoro/demo-mode", response_model=SettingsResponse)
-async def update_etoro_demo_mode(update: EtoroDemoModeUpdate):
+async def update_etoro_demo_mode(
+    update: EtoroDemoModeUpdate,
+    db: AsyncSession = Depends(get_db),
+):
     """Toggle eToro demo (Virtual) mode."""
     settings.ETORO_DEMO_MODE = update.etoro_demo_mode
+    from backend.services.settings_service import save_setting
+    await save_setting(db, "ETORO_DEMO_MODE", "true" if update.etoro_demo_mode else "false")
     logger.info("etoro demo mode toggled", enabled=settings.ETORO_DEMO_MODE)
     return _settings_response()
 
 
 @router.put("/settings/etoro", response_model=SettingsResponse)
-async def update_etoro_keys(update: EtoroKeysUpdate):
+async def update_etoro_keys(
+    update: EtoroKeysUpdate,
+    db: AsyncSession = Depends(get_db),
+):
     """Update eToro API keys."""
+    from backend.services.settings_service import save_setting
     if update.public_api_key is not None:
         settings.ETORO_PUBLIC_API_KEY = update.public_api_key
+        await save_setting(db, "ETORO_PUBLIC_API_KEY", update.public_api_key)
     if update.user_key is not None:
         settings.ETORO_USER_KEY = update.user_key
+        await save_setting(db, "ETORO_USER_KEY", update.user_key)
     logger.info("etoro keys updated")
     return _settings_response()
 
 
 @router.put("/settings/telegram", response_model=SettingsResponse)
-async def update_telegram_config(update: TelegramConfigUpdate):
+async def update_telegram_config(
+    update: TelegramConfigUpdate,
+    db: AsyncSession = Depends(get_db),
+):
     """Update Telegram bot configuration."""
+    from backend.services.settings_service import save_setting
     if update.bot_token is not None:
         settings.TELEGRAM_BOT_TOKEN = update.bot_token
+        await save_setting(db, "TELEGRAM_BOT_TOKEN", update.bot_token)
     if update.chat_id is not None:
         settings.TELEGRAM_CHAT_ID = update.chat_id
+        await save_setting(db, "TELEGRAM_CHAT_ID", update.chat_id)
     logger.info("telegram config updated")
     return _settings_response()
 
