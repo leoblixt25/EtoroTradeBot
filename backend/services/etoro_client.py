@@ -70,10 +70,7 @@ class EtoroClient:
             except httpx.HTTPStatusError as e:
                 raise EtoroAPIError(f"HTTP {resp.status_code}: {resp.text[:200]}") from e
             try:
-                body = resp.json()
-                if "portfolio" in path:
-                    logger.info("etoro portfolio response", body=str(body)[:500])
-                return body
+                return resp.json()
             except ValueError as e:
                 raise EtoroAPIError(f"Invalid JSON response: {resp.text[:200]}") from e
 
