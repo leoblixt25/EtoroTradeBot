@@ -1,0 +1,41 @@
+app:
+  name: "eToro Portfolio Manager"
+  version: "1.0.0"
+  debug: false
+  paper_trading: true
+
+risk:
+  max_drawdown: 0.25
+  max_allocation_per_trader: 0.30
+  min_diversification: 3
+  max_single_position: 0.20
+  max_crypto_exposure: 0.30
+  max_volatility: 0.40
+  min_health_score: 30
+  emergency_stop_drawdown: 0.35
+  cooldown_days_after_loss: 7
+  volatility_exposure_reduction: 0.50
+  max_daily_loss: 0.05
+
+automation:
+  enabled: false
+  max_daily_actions: 5
+  require_confirmation: true
+  audit_all_actions: true
+
+analytics:
+  update_interval_minutes: 60
+  risk_check_interval_minutes: 15
+  performance_history_days: 365
+  trader_history_months: 6
+
+notifications:
+  telegram:
+    enabled: false
+    notify_profit_milestones: true
+    notify_drawdown: true
+    notify_volatility: true
+    notify_trader_changes: true
+    notify_automation_actions: true
+    weekly_summary_day: "Monday"
+    weekly_summary_time: "09:00"
