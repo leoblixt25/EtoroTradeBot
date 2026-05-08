@@ -102,30 +102,85 @@ class EtoroClient:
         return []
 
     async def get_account(self) -> dict[str, Any]:
-        """Get account summary from portfolio endpoint.
+        """Get account summary using eToro's P&L endpoint with official formulas.
 
-        eToro API returns:
-          - clientPortfolio.credit (cash balance)
-          - clientPortfolio.unrealizedPnL (total unrealized P&L)
-          - clientPortfolio.positions[].amount (current market value per position)
-          - clientPortfolio.mirrors[].availableAmount (current value per mirror)
+        Uses the P&L endpoint as recommended by eToro's "Calculate Equity" guide.
+        Formulas per eToro docs:
+          Available Cash = credit + bonusCredit - pending orders
+          Total Invested = Σ(positions[].amount)
+                         + Σ(mirrors[].positions[].amount)
+                         + Σ(mirrors[].availableAmount - mirrors[].closedPositionsNetProfit)
+                         + Σ(ordersForOpen[].amount where mirrorID=0)
+                         + Σ(orders[].amount)
+                         + Σ(ordersForOpen[].totalExternalCosts where mirrorID=0)
+          Unrealized PnL = Σ(positions[].unrealizedPnL.pnL)
+                         + Σ(mirrors[].positions[].unrealizedPnL.pnL)
+                         + Σ(mirrors[].closedPositionsNetProfit)
+          Equity = Available Cash + Total Invested + Unrealized PnL
         """
-        data = await self._get("/trading/info/portfolio")
+        data = await self._get("/trading/info/pnl")
         if isinstance(data, dict):
-            cp = data.get("clientPortfolio", {})
+            cp = data.get("clientPortfolio", data)
             positions = cp.get("positions", []) or []
             mirrors = cp.get("mirrors", []) or []
+            orders = cp.get("orders", []) or []
+            orders_for_open = cp.get("ordersForOpen", []) or []
 
             credit = float(cp.get("credit", 0))
-            unrealized_pnl = float(cp.get("unrealizedPnL", 0))
-            invested_amount = sum(float(p.get("amount", 0)) for p in positions)
-            invested_amount += sum(float(m.get("availableAmount", 0)) for m in mirrors)
-            total_value = credit + invested_amount + unrealized_pnl
+            bonus_credit = float(cp.get("bonusCredit", 0))
+
+            # Pending orders (only manual ones with mirrorID=0)
+            pending_manual = sum(
+                float(o.get("amount", 0)) for o in orders_for_open
+                if o.get("mirrorID") == 0
+            )
+            pending_orders = sum(float(o.get("amount", 0)) for o in orders)
+
+            # Available Cash = credit + bonusCredit - pending orders
+            available_cash = credit + bonus_credit - (pending_manual + pending_orders)
+
+            # Unrealized PnL = per-position pnL + mirror position pnL + mirror closed profit
+            positions_pnl = sum(
+                float(p.get("unrealizedPnL", {}).get("pnL", 0)) for p in positions
+            )
+            mirrors_pnl = sum(
+                float(pos.get("unrealizedPnL", {}).get("pnL", 0))
+                for mirror in mirrors
+                for pos in mirror.get("positions", [])
+            )
+            closed_profit = sum(
+                float(m.get("closedPositionsNetProfit", 0)) for m in mirrors
+            )
+            unrealized_pnl = positions_pnl + mirrors_pnl + closed_profit
+
+            # Total Invested
+            pos_amounts = sum(float(p.get("amount", 0)) for p in positions)
+            mirror_pos_amounts = sum(
+                float(pos.get("amount", 0))
+                for mirror in mirrors
+                for pos in mirror.get("positions", [])
+            )
+            mirror_adjusted = sum(
+                float(m.get("availableAmount", 0)) - float(m.get("closedPositionsNetProfit", 0))
+                for m in mirrors
+            )
+            ext_costs = sum(
+                float(o.get("totalExternalCosts", 0))
+                for o in orders_for_open
+                if o.get("mirrorID") == 0
+            )
+            total_invested = (
+                pos_amounts + mirror_pos_amounts + mirror_adjusted
+                + pending_manual + pending_orders + ext_costs
+            )
+
+            # Equity = Available Cash + Total Invested + Unrealized PnL
+            equity = available_cash + total_invested + unrealized_pnl
 
             return {
-                "totalValue": round(total_value, 2),
-                "cashBalance": round(credit, 2),
-                "investedAmount": round(invested_amount, 2),
+                "totalValue": round(equity, 2),
+                "cashBalance": round(available_cash, 2),
+                "investedAmount": round(total_invested, 2),
                 "unrealizedPnl": round(unrealized_pnl, 2),
                 "dailyPnl": round(unrealized_pnl, 2),
                 "weeklyPnl": round(unrealized_pnl, 2),
