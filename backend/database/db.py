@@ -8,9 +8,15 @@ from typing import AsyncGenerator
 
 from backend.config.settings import SQLALCHEMY_DATABASE_URL
 
-_is_sqlite = SQLALCHEMY_DATABASE_URL.startswith("sqlite")
+_db_url = SQLALCHEMY_DATABASE_URL
+if _db_url.startswith("postgresql://"):
+    _db_url = _db_url.replace("postgresql://", "postgresql+asyncpg://", 1)
+if _db_url.startswith("postgres://"):
+    _db_url = _db_url.replace("postgres://", "postgresql+asyncpg://", 1)
+
+_is_sqlite = _db_url.startswith("sqlite")
 engine = create_async_engine(
-    SQLALCHEMY_DATABASE_URL,
+    _db_url,
     echo=False,
     pool_pre_ping=not _is_sqlite,
     **({} if _is_sqlite else {"pool_size": 5, "max_overflow": 10}),
