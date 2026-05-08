@@ -4,10 +4,12 @@ from datetime import datetime, timedelta, timezone
 from typing import List
 
 
-def _utcnow() -> datetime:
-    return _utcnow().replace(tzinfo=None)
 from sqlalchemy import select, func as sa_func, desc
 from sqlalchemy.ext.asyncio import AsyncSession
+
+
+def _utcnow() -> datetime:
+    return datetime.now(timezone.utc).replace(tzinfo=None)
 
 from backend.database.models import (
     Portfolio,
