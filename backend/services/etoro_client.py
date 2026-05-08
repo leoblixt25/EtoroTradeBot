@@ -10,7 +10,6 @@ from backend.config.settings import settings
 logger = structlog.get_logger(__name__)
 
 ETORO_BASE_URL = "https://public-api.etoro.com/api/v1"
-ETORO_DEMO_PREFIX = "/demo"
 
 
 class EtoroAPIError(Exception):
@@ -40,6 +39,14 @@ class EtoroClient:
             "x-user-key": self._get_user_key(),
         }
 
+    def _resolve_path(self, path: str) -> str:
+        """Resolve API path, inserting /demo for trading endpoints in demo mode."""
+        if settings.ETORO_DEMO_MODE and path.startswith("/trading/"):
+            parts = path.split("/")
+            parts.insert(3, "demo")
+            return "/".join(parts)
+        return path
+
     @retry(
         stop=stop_after_attempt(3),
         wait=wait_exponential(multiplier=1, min=2, max=10),
@@ -48,8 +55,7 @@ class EtoroClient:
     async def _get(self, path: str) -> dict[str, Any] | list[Any]:
         if not self.is_enabled:
             raise EtoroAPIError("eToro API not configured — set ETORO_PUBLIC_API_KEY and ETORO_USER_KEY")
-        prefix = ETORO_DEMO_PREFIX if settings.ETORO_DEMO_MODE else ""
-        url = f"{ETORO_BASE_URL}{prefix}{path}"
+        url = f"{ETORO_BASE_URL}{self._resolve_path(path)}"
         async with httpx.AsyncClient(timeout=30) as client:
             resp = await client.get(url, headers=self._headers())
             if resp.status_code == 429:
@@ -64,7 +70,10 @@ class EtoroClient:
             except httpx.HTTPStatusError as e:
                 raise EtoroAPIError(f"HTTP {resp.status_code}: {resp.text[:200]}") from e
             try:
-                return resp.json()
+                body = resp.json()
+                if "portfolio" in path:
+                    logger.info("etoro portfolio response", body=str(body)[:500])
+                return body
             except ValueError as e:
                 raise EtoroAPIError(f"Invalid JSON response: {resp.text[:200]}") from e
 
