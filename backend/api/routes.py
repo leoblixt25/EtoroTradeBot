@@ -159,13 +159,16 @@ async def get_portfolio_history(
 async def sync_portfolio(
     user: User = Depends(get_current_user),
     portfolio_service: PortfolioService = Depends(get_portfolio_service),
+    db: AsyncSession = Depends(get_db),
 ):
     """Trigger a portfolio synchronization with eToro."""
     try:
         result = await portfolio_service.sync_portfolio(user.id)
+        await db.commit()
         return SyncResponse(**result)
     except Exception as e:
-        logger.error("sync_portfolio unhandled error", error=str(e))
+        logger.error("sync_portfolio unhandled error", error=str(e), exc_info=True)
+        await db.rollback()
         return SyncResponse(status="error", message=f"Sync failed: {str(e)}")
 
 
