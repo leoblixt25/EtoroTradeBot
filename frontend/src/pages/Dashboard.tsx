@@ -1,4 +1,4 @@
-import { Info } from 'lucide-react';
+import { RefreshCw, Info } from 'lucide-react';
 import PortfolioSummary from '../dashboard/PortfolioSummary';
 import PerformanceChart from '../dashboard/PerformanceChart';
 import AllocationChart from '../dashboard/AllocationChart';
@@ -15,16 +15,31 @@ import {
   useAlerts,
   useHistory,
 } from '../hooks/useApi';
+import { syncPortfolio } from '../services/api';
 import type { ChartDataPoint, HealthScoreBreakdown, AiRecommendation, Alert } from '../types';
+import { useState } from 'react';
 
 export default function Dashboard() {
-  const { data: portfolio, loading: portfolioLoading } = usePortfolio();
+  const { data: portfolio, loading: portfolioLoading, refetch: refetchPortfolio } = usePortfolio();
   const { data: positions } = usePositions();
   const { data: traders, loading: tradersLoading } = useTraders();
   const { data: risk, loading: riskLoading } = useRiskMetrics();
   const { data: recs } = useRecommendations();
   const { data: alerts } = useAlerts();
   const { data: history, loading: historyLoading } = useHistory();
+  const [syncing, setSyncing] = useState(false);
+
+  const handleSync = async () => {
+    setSyncing(true);
+    try {
+      await syncPortfolio();
+      await refetchPortfolio();
+    } catch {
+      // handled
+    } finally {
+      setSyncing(false);
+    }
+  };
 
   const allocationData: ChartDataPoint[] = (positions || []).reduce(
     (acc: ChartDataPoint[], pos) => {
@@ -51,6 +66,17 @@ export default function Dashboard() {
 
   return (
     <div className="space-y-6 animate-fade-in">
+      <div className="flex items-center justify-between">
+        <h1 className="text-2xl font-bold text-[var(--text-primary)]">Dashboard</h1>
+        <button
+          onClick={handleSync}
+          disabled={syncing}
+          className="btn btn-sm btn-ghost gap-2"
+        >
+          <RefreshCw size={16} className={syncing ? 'animate-spin' : ''} />
+          {syncing ? 'Syncing...' : 'Sync Now'}
+        </button>
+      </div>
       <PortfolioSummary data={portfolio} loading={portfolioLoading} />
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
