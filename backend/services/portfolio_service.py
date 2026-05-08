@@ -2,6 +2,10 @@ import structlog
 import math
 from datetime import datetime, timedelta, timezone
 from typing import List
+
+
+def _utcnow() -> datetime:
+    return _utcnow().replace(tzinfo=None)
 from sqlalchemy import select, func as sa_func, desc
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -164,7 +168,7 @@ class PortfolioService:
         positions = await self.get_positions(portfolio_id)
         base_value = float(portfolio.total_value or 10000.0)
 
-        now = datetime.now(timezone.utc)
+        now = _utcnow()
         points = []
         current_value = 10000.0
 
@@ -186,7 +190,7 @@ class PortfolioService:
         return points
 
     async def sync_portfolio(self, user_id: int) -> dict:
-        start = datetime.now(timezone.utc)
+        start = _utcnow()
         portfolio = await self.get_or_create_portfolio(user_id)
         etoro = EtoroClient()
 
@@ -216,7 +220,7 @@ class PortfolioService:
         portfolio.daily_pnl = round(account.get("dailyPnl", 0), 2)
         portfolio.weekly_pnl = round(account.get("weeklyPnl", 0), 2)
         portfolio.monthly_pnl = round(account.get("monthlyPnl", 0), 2)
-        portfolio.last_updated = datetime.now(timezone.utc)
+        portfolio.last_updated = _utcnow()
 
         from sqlalchemy import delete as sa_delete
         await self.db.execute(sa_delete(Position).where(Position.portfolio_id == portfolio.id))
@@ -315,7 +319,7 @@ class PortfolioService:
         )
         self.db.add(audit)
 
-        duration = (datetime.now(timezone.utc) - start).total_seconds() * 1000
+        duration = (_utcnow() - start).total_seconds() * 1000
         logger.info("etoro sync completed", positions=len(etoro_positions), mirrors=traders_synced, duration_ms=round(duration, 2))
 
         return {
@@ -332,7 +336,7 @@ class PortfolioService:
         traders_result = await self.db.execute(traders_stmt)
         traders = list(traders_result.scalars().all())
 
-        today_seed = hash(datetime.now(timezone.utc).strftime("%Y-%m-%d")) & 0x7FFFFFFF
+        today_seed = hash(_utcnow().strftime("%Y-%m-%d")) & 0x7FFFFFFF
         rng = __import__("random").Random(today_seed)
 
         for position in positions:
@@ -340,13 +344,13 @@ class PortfolioService:
             position.current_price = position.entry_price * (1 + price_shift)
             position.pnl = (position.current_price - position.entry_price) * position.amount
             position.pnl_percent = ((position.current_price - position.entry_price) / position.entry_price) * 100 if position.entry_price else 0
-            position.updated_at = datetime.now(timezone.utc)
+            position.updated_at = _utcnow()
 
         for trader in traders:
             roi_shift = rng.uniform(-0.03, 0.03)
             trader.total_roi += roi_shift
             trader.total_pnl = trader.current_value * trader.total_roi / 100
-            trader.last_updated = datetime.now(timezone.utc)
+            trader.last_updated = _utcnow()
 
         total_invested = sum(p.allocated_amount for p in positions)
         total_unrealized = sum(p.pnl for p in positions)
@@ -355,7 +359,7 @@ class PortfolioService:
         portfolio.total_value = round(total_value, 2)
         portfolio.invested_amount = round(total_invested, 2)
         portfolio.unrealized_pnl = round(total_unrealized, 2)
-        portfolio.last_updated = datetime.now(timezone.utc)
+        portfolio.last_updated = _utcnow()
         portfolio.health_score = await self.calculate_health_score(portfolio.id)
 
         risk = RiskMetric(
@@ -386,7 +390,7 @@ class PortfolioService:
         )
         self.db.add(audit)
 
-        duration = (datetime.now(timezone.utc) - start).total_seconds() * 1000
+        duration = (_utcnow() - start).total_seconds() * 1000
         return {
             "status": "success",
             "message": "Portfolio synced (simulated)",
