@@ -205,6 +205,9 @@ class PortfolioService:
         except EtoroAPIError as e:
             logger.error("etoro sync failed", error=str(e))
             return {"status": "error", "message": str(e), "positions_synced": 0, "traders_synced": 0}
+        except Exception as e:
+            logger.error("etoro sync unexpected error", error=str(e))
+            return {"status": "error", "message": f"Unexpected error: {str(e)}", "positions_synced": 0, "traders_synced": 0}
 
         portfolio.total_value = round(account.get("totalValue", 0), 2)
         portfolio.cash_balance = round(account.get("cashBalance", 0), 2)

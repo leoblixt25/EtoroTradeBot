@@ -59,8 +59,14 @@ class EtoroClient:
                 raise EtoroAPIError("Unauthorized — check API keys")
             if resp.status_code == 404:
                 return {}
-            resp.raise_for_status()
-            return resp.json()
+            try:
+                resp.raise_for_status()
+            except httpx.HTTPStatusError as e:
+                raise EtoroAPIError(f"HTTP {resp.status_code}: {resp.text[:200]}") from e
+            try:
+                return resp.json()
+            except ValueError as e:
+                raise EtoroAPIError(f"Invalid JSON response: {resp.text[:200]}") from e
 
     async def get_portfolio(self) -> dict[str, Any]:
         """Get comprehensive portfolio info including positions and account status."""

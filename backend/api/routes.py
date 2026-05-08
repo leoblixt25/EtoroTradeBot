@@ -161,8 +161,12 @@ async def sync_portfolio(
     portfolio_service: PortfolioService = Depends(get_portfolio_service),
 ):
     """Trigger a portfolio synchronization with eToro."""
-    result = await portfolio_service.sync_portfolio(user.id)
-    return SyncResponse(**result)
+    try:
+        result = await portfolio_service.sync_portfolio(user.id)
+        return SyncResponse(**result)
+    except Exception as e:
+        logger.error("sync_portfolio unhandled error", error=str(e))
+        return SyncResponse(status="error", message=f"Sync failed: {str(e)}")
 
 
 # ─── Trader Endpoints ─────────────────────────────────────────────────────────
