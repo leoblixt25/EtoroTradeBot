@@ -102,10 +102,9 @@ class EtoroClient:
         return []
 
     async def get_account(self) -> dict[str, Any]:
-        """Get account summary using eToro's P&L endpoint with official formulas.
+        """Get account summary using eToro portfolio endpoint with corrected formulas.
 
-        Uses the P&L endpoint as recommended by eToro's "Calculate Equity" guide.
-        Formulas per eToro docs:
+        Uses the portfolio endpoint (proven working) with eToro's official formulas:
           Available Cash = credit + bonusCredit - pending orders
           Total Invested = Σ(positions[].amount)
                          + Σ(mirrors[].positions[].amount)
@@ -113,14 +112,11 @@ class EtoroClient:
                          + Σ(ordersForOpen[].amount where mirrorID=0)
                          + Σ(orders[].amount)
                          + Σ(ordersForOpen[].totalExternalCosts where mirrorID=0)
-          Unrealized PnL = Σ(positions[].unrealizedPnL.pnL)
-                         + Σ(mirrors[].positions[].unrealizedPnL.pnL)
-                         + Σ(mirrors[].closedPositionsNetProfit)
-          Equity = Available Cash + Total Invested + Unrealized PnL
+          Equity = Available Cash + Total Invested + portfolio unrealizedPnL
         """
-        data = await self._get("/trading/info/pnl")
+        data = await self._get("/trading/info/portfolio")
         if isinstance(data, dict):
-            cp = data.get("clientPortfolio", data)
+            cp = data.get("clientPortfolio", {})
             positions = cp.get("positions", []) or []
             mirrors = cp.get("mirrors", []) or []
             orders = cp.get("orders", []) or []
@@ -139,21 +135,10 @@ class EtoroClient:
             # Available Cash = credit + bonusCredit - pending orders
             available_cash = credit + bonus_credit - (pending_manual + pending_orders)
 
-            # Unrealized PnL = per-position pnL + mirror position pnL + mirror closed profit
-            positions_pnl = sum(
-                float(p.get("unrealizedPnL", {}).get("pnL", 0)) for p in positions
-            )
-            mirrors_pnl = sum(
-                float(pos.get("unrealizedPnL", {}).get("pnL", 0))
-                for mirror in mirrors
-                for pos in mirror.get("positions", [])
-            )
-            closed_profit = sum(
-                float(m.get("closedPositionsNetProfit", 0)) for m in mirrors
-            )
-            unrealized_pnl = positions_pnl + mirrors_pnl + closed_profit
+            # Unrealized PnL — use flat portfolio-level value (safe for both endpoints)
+            unrealized_pnl = float(cp.get("unrealizedPnL", 0))
 
-            # Total Invested
+            # Total Invested per eToro formula
             pos_amounts = sum(float(p.get("amount", 0)) for p in positions)
             mirror_pos_amounts = sum(
                 float(pos.get("amount", 0))
