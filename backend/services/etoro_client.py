@@ -67,32 +67,58 @@ class EtoroClient:
         return await self._get("/trading/info/portfolio")
 
     async def get_positions(self) -> list[dict[str, Any]]:
-        """Extract positions from portfolio data."""
+        """Extract positions from portfolio data, including mirror (copy-trade) positions."""
         data = await self._get("/trading/info/portfolio")
         if isinstance(data, dict):
             client_portfolio = data.get("clientPortfolio", {})
-            positions = client_portfolio.get("positions", [])
-            return positions if isinstance(positions, list) else []
+            positions = list(client_portfolio.get("positions", []) or [])
+            mirrors = client_portfolio.get("mirrors", []) or []
+            for mirror in mirrors:
+                mirror_positions = mirror.get("positions", []) or []
+                for mp in mirror_positions:
+                    mp["_mirrorId"] = mirror.get("mirrorId")
+                    mp["_parentUsername"] = mirror.get("parentUsername", "")
+                positions.extend(mirror_positions)
+            return positions
+        return []
+
+    async def get_mirrors(self) -> list[dict[str, Any]]:
+        """Extract mirror copy-trading relationships from portfolio data."""
+        data = await self._get("/trading/info/portfolio")
+        if isinstance(data, dict):
+            return data.get("clientPortfolio", {}).get("mirrors", []) or []
         return []
 
     async def get_account(self) -> dict[str, Any]:
-        """Get account summary from portfolio endpoint."""
+        """Get account summary from portfolio endpoint.
+
+        eToro API returns:
+          - clientPortfolio.credit (cash balance)
+          - clientPortfolio.unrealizedPnL (total unrealized P&L)
+          - clientPortfolio.positions[].amount (current market value per position)
+          - clientPortfolio.mirrors[].availableAmount (current value per mirror)
+        """
         data = await self._get("/trading/info/portfolio")
         if isinstance(data, dict):
-            client_portfolio = data.get("clientPortfolio", {})
-            account = {
-                "totalValue": client_portfolio.get("currentValue", 0),
-                "cashBalance": client_portfolio.get("cashBalance", 0),
-                "investedAmount": client_portfolio.get("investedAmount", 0),
-                "realizedPnl": client_portfolio.get("realizedPnl", 0),
-                "dailyPnl": client_portfolio.get("dailyPnl", 0),
-                "weeklyPnl": client_portfolio.get("weeklyPnl", 0),
-                "monthlyPnl": client_portfolio.get("monthlyPnl", 0),
-                "maxDrawdown": client_portfolio.get("maxDrawdown", 0),
-                "volatility": client_portfolio.get("volatility", 0),
-                "leverage": client_portfolio.get("leverage", 1),
+            cp = data.get("clientPortfolio", {})
+            positions = cp.get("positions", []) or []
+            mirrors = cp.get("mirrors", []) or []
+
+            credit = float(cp.get("credit", 0))
+            unrealized_pnl = float(cp.get("unrealizedPnL", 0))
+            invested_amount = sum(float(p.get("amount", 0)) for p in positions)
+            invested_amount += sum(float(m.get("availableAmount", 0)) for m in mirrors)
+            total_value = credit + invested_amount + unrealized_pnl
+
+            return {
+                "totalValue": round(total_value, 2),
+                "cashBalance": round(credit, 2),
+                "investedAmount": round(invested_amount, 2),
+                "unrealizedPnl": round(unrealized_pnl, 2),
+                "dailyPnl": round(unrealized_pnl, 2),
+                "weeklyPnl": round(unrealized_pnl, 2),
+                "monthlyPnl": round(unrealized_pnl, 2),
             }
-            return account
         return {}
 
     async def get_watchlists(self) -> list[dict[str, Any]]:

@@ -201,6 +201,7 @@ class PortfolioService:
         try:
             account = await etoro.get_account()
             etoro_positions = await etoro.get_positions()
+            mirrors = await etoro.get_mirrors()
         except EtoroAPIError as e:
             logger.error("etoro sync failed", error=str(e))
             return {"status": "error", "message": str(e), "positions_synced": 0, "traders_synced": 0}
@@ -208,61 +209,91 @@ class PortfolioService:
         portfolio.total_value = round(account.get("totalValue", 0), 2)
         portfolio.cash_balance = round(account.get("cashBalance", 0), 2)
         portfolio.invested_amount = round(account.get("investedAmount", 0), 2)
-        portfolio.realized_pnl = round(account.get("realizedPnl", 0), 2)
+        portfolio.unrealized_pnl = round(account.get("unrealizedPnl", 0), 2)
+        portfolio.daily_pnl = round(account.get("dailyPnl", 0), 2)
+        portfolio.weekly_pnl = round(account.get("weeklyPnl", 0), 2)
+        portfolio.monthly_pnl = round(account.get("monthlyPnl", 0), 2)
         portfolio.last_updated = datetime.now(timezone.utc)
 
         from sqlalchemy import delete as sa_delete
         await self.db.execute(sa_delete(Position).where(Position.portfolio_id == portfolio.id))
+        await self.db.execute(sa_delete(CopiedTrader).where(CopiedTrader.portfolio_id == portfolio.id))
 
         total_allocated = 0
         for ep in etoro_positions:
-            position_amount = float(ep.get("amount", 0))
-            allocated_amount = float(ep.get("currentValue", position_amount))
+            market_value = float(ep.get("amount", 0))
+            units = float(ep.get("amountInUnits", 0) or 0)
             entry_price = float(ep.get("openRate", 0))
-            pnl = allocated_amount - position_amount
-            total_allocated += allocated_amount
+            is_buy = ep.get("isBuy", True)
+
+            if units > 0 and entry_price > 0:
+                current_price = market_value / units
+                pnl = market_value - (units * entry_price)
+            else:
+                current_price = entry_price
+                pnl = 0.0
+
+            total_allocated += market_value
 
             pos = Position(
                 portfolio_id=portfolio.id,
                 instrument_type="cfd",
-                instrument_symbol=str(ep.get("instrumentID", "")),
-                instrument_name=f"Instrument {ep.get('instrumentID', '')}",
-                amount=float(ep.get("units", 0)),
+                instrument_symbol=str(ep.get("instrumentId", "")),
+                instrument_name=f"Instrument {ep.get('instrumentId', '')}",
+                amount=units,
                 entry_price=entry_price,
-                current_price=entry_price + (pnl / float(ep.get("units", 1))) if ep.get("units", 0) else entry_price,
-                allocated_amount=round(allocated_amount, 2),
+                current_price=current_price,
+                allocated_amount=round(market_value, 2),
                 pnl=round(pnl, 2),
-                pnl_percent=round((pnl / position_amount * 100) if position_amount else 0, 2),
+                pnl_percent=round((pnl / (units * entry_price) * 100) if units * entry_price else 0, 2),
                 allocation_percent=0,
             )
             self.db.add(pos)
 
-        etoro_pnl_sum = sum(
-            float(ep.get("currentValue", 0)) - float(ep.get("amount", 0))
-            for ep in etoro_positions
-        )
-        portfolio.unrealized_pnl = round(etoro_pnl_sum, 2)
-        portfolio.daily_pnl = round(account.get("dailyPnl", 0), 2)
-        portfolio.weekly_pnl = round(account.get("weeklyPnl", 0), 2)
-        portfolio.monthly_pnl = round(account.get("monthlyPnl", 0), 2)
+        traders_synced = 0
+        for mirror in mirrors:
+            parent_username = mirror.get("parentUsername", "") or f"Trader_{mirror.get('cid', 0)}"
+            available_amount = float(mirror.get("availableAmount", 0))
+            initial_investment = float(mirror.get("initialInvestment", 0))
+            mirror_pnl = available_amount - initial_investment
+            mirror_roi = (mirror_pnl / initial_investment * 100) if initial_investment else 0
+
+            trader = CopiedTrader(
+                portfolio_id=portfolio.id,
+                trader_name=parent_username,
+                trader_id=str(mirror.get("mirrorId", mirror.get("cid", 0))),
+                allocation_percent=round(available_amount / (portfolio.total_value or 1) * 100, 2),
+                current_value=round(available_amount, 2),
+                total_pnl=round(mirror_pnl, 2),
+                total_roi=round(mirror_roi, 2),
+                status="active" if not mirror.get("isPaused", False) else "paused",
+                classification="balanced",
+            )
+            self.db.add(trader)
+            traders_synced += 1
 
         portfolio.health_score = await self.calculate_health_score(portfolio.id)
         total_value = portfolio.total_value or 1
 
+        # Update allocation percentages for positions
+        positions_db = await self.get_positions(portfolio.id)
+        for p in positions_db:
+            p.allocation_percent = round((p.allocated_amount / total_value * 100) if total_value else 0, 2)
+
         max_alloc_pct = max(
-            (float(ep.get("currentValue", 0)) / total_value if total_value else 0)
-            for ep in etoro_positions
-        ) if etoro_positions else 0
+            (p.allocated_amount / total_value if total_value else 0)
+            for p in positions_db
+        ) if positions_db else 0
 
         risk = RiskMetric(
             portfolio_id=portfolio.id,
             total_exposure=round(total_allocated, 2),
             var_95=round(total_value * 0.05, 2),
-            max_drawdown=float(account.get("maxDrawdown", 0)),
-            volatility=float(account.get("volatility", 0)),
+            max_drawdown=0.0,
+            volatility=0.0,
             concentration_risk=round(max_alloc_pct, 2),
             correlation_risk=0.3,
-            leverage_ratio=float(account.get("leverage", 1)),
+            leverage_ratio=1.0,
             risk_score=round(100 - portfolio.health_score, 1),
             health_score=portfolio.health_score,
         )
@@ -274,6 +305,7 @@ class PortfolioService:
             action_type="system",
             details={
                 "positions_count": len(etoro_positions),
+                "traders_count": traders_synced,
                 "total_value": portfolio.total_value,
                 "source": "etoro_api",
             },
@@ -281,13 +313,13 @@ class PortfolioService:
         self.db.add(audit)
 
         duration = (datetime.now(timezone.utc) - start).total_seconds() * 1000
-        logger.info("etoro sync completed", positions=len(etoro_positions), duration_ms=round(duration, 2))
+        logger.info("etoro sync completed", positions=len(etoro_positions), mirrors=traders_synced, duration_ms=round(duration, 2))
 
         return {
             "status": "success",
             "message": "Portfolio synced from eToro API",
             "positions_synced": len(etoro_positions),
-            "traders_synced": 0,
+            "traders_synced": traders_synced,
             "duration_ms": round(duration, 2),
         }
 
