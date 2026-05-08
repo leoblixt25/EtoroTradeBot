@@ -329,6 +329,7 @@ class MessageResponse(BaseModel):
 
 class SettingsResponse(BaseModel):
     paper_trading: bool
+    etoro_demo_mode: bool = False
     telegram_configured: bool
     etoro_configured: bool
     etoro_public_key_masked: str | None = None
@@ -339,6 +340,10 @@ class SettingsResponse(BaseModel):
 
 class PaperTradingUpdate(BaseModel):
     paper_trading: bool
+
+
+class EtoroDemoModeUpdate(BaseModel):
+    etoro_demo_mode: bool
 
 
 class EtoroKeysUpdate(BaseModel):

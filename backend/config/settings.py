@@ -18,6 +18,7 @@ class Settings(BaseSettings):
     ETORO_USERNAME: str | None = None
     ETORO_PUBLIC_API_KEY: str | None = None
     ETORO_USER_KEY: str | None = None
+    ETORO_DEMO_MODE: bool = False
     PAPER_TRADING: bool = True
     MAX_PORTFOLIO_DRAWDOWN: float = 0.25
     MAX_ALLOCATION_PER_TRADER: float = 0.30

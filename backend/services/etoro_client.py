@@ -10,6 +10,7 @@ from backend.config.settings import settings
 logger = structlog.get_logger(__name__)
 
 ETORO_BASE_URL = "https://public-api.etoro.com/api/v1"
+ETORO_DEMO_PREFIX = "/demo"
 
 
 class EtoroAPIError(Exception):
@@ -47,7 +48,8 @@ class EtoroClient:
     async def _get(self, path: str) -> dict[str, Any] | list[Any]:
         if not self.is_enabled:
             raise EtoroAPIError("eToro API not configured — set ETORO_PUBLIC_API_KEY and ETORO_USER_KEY")
-        url = f"{ETORO_BASE_URL}{path}"
+        prefix = ETORO_DEMO_PREFIX if settings.ETORO_DEMO_MODE else ""
+        url = f"{ETORO_BASE_URL}{prefix}{path}"
         async with httpx.AsyncClient(timeout=30) as client:
             resp = await client.get(url, headers=self._headers())
             if resp.status_code == 429:
@@ -108,7 +110,7 @@ class EtoroClient:
 
     async def health_check(self) -> bool:
         try:
-            await self._get("/watchlists")
+            await self._get("/me")
             return True
         except EtoroAPIError:
             raise

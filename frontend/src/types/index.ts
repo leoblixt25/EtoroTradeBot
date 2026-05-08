@@ -186,6 +186,7 @@ export interface PaginatedResponse<T> {
 
 export interface AppSettings {
   paper_trading: boolean;
+  etoro_demo_mode: boolean;
   telegram_configured: boolean;
   etoro_configured: boolean;
   etoro_public_key_masked: string | null;

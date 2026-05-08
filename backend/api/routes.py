@@ -50,6 +50,7 @@ from backend.database.schema import (
     TraderAnalysis as TraderAnalysisSchema,
     SettingsResponse,
     PaperTradingUpdate,
+    EtoroDemoModeUpdate,
     EtoroKeysUpdate,
     TelegramConfigUpdate,
 )
@@ -904,11 +905,10 @@ def _mask_key(key: str | None) -> str | None:
     return key[:4] + "****" + key[-4:]
 
 
-@router.get("/settings", response_model=SettingsResponse)
-async def get_settings():
-    """Get current application settings (masked keys)."""
+def _settings_response() -> SettingsResponse:
     return SettingsResponse(
         paper_trading=settings.PAPER_TRADING,
+        etoro_demo_mode=settings.ETORO_DEMO_MODE,
         telegram_configured=bool(settings.TELEGRAM_BOT_TOKEN and settings.TELEGRAM_CHAT_ID),
         etoro_configured=bool(settings.ETORO_PUBLIC_API_KEY and settings.ETORO_USER_KEY),
         etoro_public_key_masked=_mask_key(settings.ETORO_PUBLIC_API_KEY or settings.ETORO_API_KEY),
@@ -916,6 +916,12 @@ async def get_settings():
         telegram_bot_token_masked=_mask_key(settings.TELEGRAM_BOT_TOKEN),
         telegram_chat_id_masked=_mask_key(settings.TELEGRAM_CHAT_ID),
     )
+
+
+@router.get("/settings", response_model=SettingsResponse)
+async def get_settings():
+    """Get current application settings (masked keys)."""
+    return _settings_response()
 
 
 @router.put("/settings/paper-trading", response_model=SettingsResponse)
@@ -923,15 +929,15 @@ async def update_paper_trading(update: PaperTradingUpdate):
     """Toggle paper trading mode."""
     settings.PAPER_TRADING = update.paper_trading
     logger.info("paper trading toggled", enabled=settings.PAPER_TRADING)
-    return SettingsResponse(
-        paper_trading=settings.PAPER_TRADING,
-        telegram_configured=bool(settings.TELEGRAM_BOT_TOKEN and settings.TELEGRAM_CHAT_ID),
-        etoro_configured=bool(settings.ETORO_PUBLIC_API_KEY and settings.ETORO_USER_KEY),
-        etoro_public_key_masked=_mask_key(settings.ETORO_PUBLIC_API_KEY or settings.ETORO_API_KEY),
-        etoro_user_key_masked=_mask_key(settings.ETORO_USER_KEY or settings.ETORO_USERNAME),
-        telegram_bot_token_masked=_mask_key(settings.TELEGRAM_BOT_TOKEN),
-        telegram_chat_id_masked=_mask_key(settings.TELEGRAM_CHAT_ID),
-    )
+    return _settings_response()
+
+
+@router.put("/settings/etoro/demo-mode", response_model=SettingsResponse)
+async def update_etoro_demo_mode(update: EtoroDemoModeUpdate):
+    """Toggle eToro demo (Virtual) mode."""
+    settings.ETORO_DEMO_MODE = update.etoro_demo_mode
+    logger.info("etoro demo mode toggled", enabled=settings.ETORO_DEMO_MODE)
+    return _settings_response()
 
 
 @router.put("/settings/etoro", response_model=SettingsResponse)
@@ -942,15 +948,7 @@ async def update_etoro_keys(update: EtoroKeysUpdate):
     if update.user_key is not None:
         settings.ETORO_USER_KEY = update.user_key
     logger.info("etoro keys updated")
-    return SettingsResponse(
-        paper_trading=settings.PAPER_TRADING,
-        telegram_configured=bool(settings.TELEGRAM_BOT_TOKEN and settings.TELEGRAM_CHAT_ID),
-        etoro_configured=bool(settings.ETORO_PUBLIC_API_KEY and settings.ETORO_USER_KEY),
-        etoro_public_key_masked=_mask_key(settings.ETORO_PUBLIC_API_KEY or settings.ETORO_API_KEY),
-        etoro_user_key_masked=_mask_key(settings.ETORO_USER_KEY or settings.ETORO_USERNAME),
-        telegram_bot_token_masked=_mask_key(settings.TELEGRAM_BOT_TOKEN),
-        telegram_chat_id_masked=_mask_key(settings.TELEGRAM_CHAT_ID),
-    )
+    return _settings_response()
 
 
 @router.put("/settings/telegram", response_model=SettingsResponse)
@@ -961,15 +959,7 @@ async def update_telegram_config(update: TelegramConfigUpdate):
     if update.chat_id is not None:
         settings.TELEGRAM_CHAT_ID = update.chat_id
     logger.info("telegram config updated")
-    return SettingsResponse(
-        paper_trading=settings.PAPER_TRADING,
-        telegram_configured=bool(settings.TELEGRAM_BOT_TOKEN and settings.TELEGRAM_CHAT_ID),
-        etoro_configured=bool(settings.ETORO_PUBLIC_API_KEY and settings.ETORO_USER_KEY),
-        etoro_public_key_masked=_mask_key(settings.ETORO_PUBLIC_API_KEY or settings.ETORO_API_KEY),
-        etoro_user_key_masked=_mask_key(settings.ETORO_USER_KEY or settings.ETORO_USERNAME),
-        telegram_bot_token_masked=_mask_key(settings.TELEGRAM_BOT_TOKEN),
-        telegram_chat_id_masked=_mask_key(settings.TELEGRAM_CHAT_ID),
-    )
+    return _settings_response()
 
 
 @router.post("/settings/etoro/test", response_model=MessageResponse)

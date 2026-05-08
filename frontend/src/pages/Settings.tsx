@@ -21,6 +21,7 @@ import {
   updateTelegramConfig,
   testTelegram,
   testEtoroConnection,
+  updateEtoroDemoMode,
   syncPortfolio,
 } from '../services/api';
 import { useTheme } from '../context/ThemeContext';
@@ -48,6 +49,8 @@ export default function Settings() {
   const [savingEtoro, setSavingEtoro] = useState(false);
   const [testingEtoro, setTestingEtoro] = useState(false);
   const [etoroTestResult, setEtoroTestResult] = useState<string | null>(null);
+  const [etoroDemoMode, setEtoroDemoMode] = useState(false);
+  const [togglingDemoMode, setTogglingDemoMode] = useState(false);
 
   // Telegram
   const [showBotToken, setShowBotToken] = useState(false);
@@ -60,6 +63,7 @@ export default function Settings() {
   useEffect(() => {
     if (settings) {
       setPaperTrading(settings.paper_trading);
+      setEtoroDemoMode(settings.etoro_demo_mode);
     }
   }, [settings]);
 
@@ -130,6 +134,19 @@ export default function Settings() {
       setEtoroTestResult(e instanceof Error ? e.message : 'error');
     } finally {
       setTestingEtoro(false);
+    }
+  };
+
+  const handleToggleDemoMode = async () => {
+    setTogglingDemoMode(true);
+    try {
+      const result = await updateEtoroDemoMode(!etoroDemoMode);
+      setEtoroDemoMode(result.etoro_demo_mode);
+      refetchSettings();
+    } catch {
+      // handled
+    } finally {
+      setTogglingDemoMode(false);
     }
   };
 
@@ -373,6 +390,17 @@ export default function Settings() {
                 <XCircle size={12} /> {etoroTestResult}
               </p>
             )}
+            <div className="flex items-center justify-between pt-2 border-t border-[var(--border-color)]">
+              <div>
+                <p className="text-sm font-medium text-[var(--text-primary)]">
+                  Demo (Virtual) Mode
+                </p>
+                <p className="text-xs text-[var(--text-secondary)]">
+                  Use /demo/ endpoints for Virtual environment keys
+                </p>
+              </div>
+              <Toggle enabled={etoroDemoMode} onClick={handleToggleDemoMode} loading={togglingDemoMode} />
+            </div>
           </div>
         </Card>
 

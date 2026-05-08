@@ -283,6 +283,15 @@ export async function getSettings(): Promise<AppSettings> {
   }
 }
 
+export async function updateEtoroDemoMode(enabled: boolean): Promise<AppSettings> {
+  try {
+    const { data } = await api.put('/settings/etoro/demo-mode', { etoro_demo_mode: enabled });
+    return data;
+  } catch (error) {
+    throw new Error(handleError(error));
+  }
+}
+
 export async function updatePaperTrading(enabled: boolean): Promise<AppSettings> {
   try {
     const { data } = await api.put('/settings/paper-trading', { paper_trading: enabled });
