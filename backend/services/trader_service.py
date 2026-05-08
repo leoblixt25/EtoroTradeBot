@@ -3,6 +3,10 @@ import math
 import random
 from datetime import datetime, timedelta, timezone
 from typing import List
+
+
+def _utcnow() -> datetime:
+    return datetime.now(timezone.utc).replace(tzinfo=None)
 from sqlalchemy import select, desc
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -43,7 +47,7 @@ class TraderService:
     ) -> List[TraderPerformance]:
         days_map = {"1m": 30, "3m": 90, "6m": 180, "1y": 365}
         days = days_map.get(period, 90)
-        cutoff = datetime.now(timezone.utc) - timedelta(days=days)
+        cutoff = _utcnow() - timedelta(days=days)
 
         stmt = (
             select(TraderPerformance)
@@ -179,7 +183,7 @@ class TraderService:
             return trader
 
         trader.status = "paused"
-        trader.last_updated = datetime.now(timezone.utc)
+        trader.last_updated = _utcnow()
 
         audit = AuditLog(
             portfolio_id=trader.portfolio_id,
@@ -200,7 +204,7 @@ class TraderService:
             return trader
 
         trader.status = "active"
-        trader.last_updated = datetime.now(timezone.utc)
+        trader.last_updated = _utcnow()
 
         audit = AuditLog(
             portfolio_id=trader.portfolio_id,

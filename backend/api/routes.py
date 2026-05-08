@@ -4,6 +4,10 @@ import random
 from datetime import datetime, timedelta, timezone
 from typing import List
 from fastapi import APIRouter, Depends, HTTPException, Query, status, WebSocket, WebSocketDisconnect
+
+
+def _utcnow() -> datetime:
+    return datetime.now(timezone.utc).replace(tzinfo=None)
 from sqlalchemy import select, desc, func as sa_func, delete as sa_delete
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -372,7 +376,7 @@ async def emergency_stop(
     for trader in traders:
         if trader.status == "active":
             trader.status = "paused"
-            trader.last_updated = datetime.now(timezone.utc)
+            trader.last_updated = _utcnow()
             actions_taken.append(f"Paused {trader.trader_name}")
 
     audit = AuditLog(
@@ -486,7 +490,7 @@ async def update_automation_rule(
     if rule_data.cooldown_days is not None:
         rule.cooldown_days = rule_data.cooldown_days
 
-    rule.updated_at = datetime.now(timezone.utc)
+    rule.updated_at = _utcnow()
     return AutomationRuleResponse.model_validate(rule)
 
 
@@ -513,7 +517,7 @@ async def toggle_automation_rule(
     if rule is None:
         raise HTTPException(status_code=404, detail="Rule not found")
     rule.enabled = not rule.enabled
-    rule.updated_at = datetime.now(timezone.utc)
+    rule.updated_at = _utcnow()
 
     audit = AuditLog(
         portfolio_id=rule.portfolio_id,
@@ -561,7 +565,7 @@ async def execute_automation_rule(
 
     if rule.cooldown_days > 0 and rule.last_triggered:
         cooldown_end = rule.last_triggered + timedelta(days=rule.cooldown_days)
-        if datetime.now(timezone.utc) < cooldown_end:
+        if _utcnow() < cooldown_end:
             raise HTTPException(
                 status_code=429,
                 detail=f"Rule is in cooldown until {cooldown_end.isoformat()}",
@@ -626,7 +630,7 @@ async def execute_automation_rule(
         details=action_details,
     )
     db.add(log_entry)
-    rule.last_triggered = datetime.now(timezone.utc)
+    rule.last_triggered = _utcnow()
 
     audit = AuditLog(
         portfolio_id=rule.portfolio_id,
@@ -805,10 +809,10 @@ async def get_weekly_summary(
         confidence_score=0.95,
         details={
             "alert_id": alert.id,
-            "generated_at": datetime.now(timezone.utc).isoformat(),
+            "generated_at": _utcnow().isoformat(),
         },
         applied=False,
-        created_at=datetime.now(timezone.utc),
+        created_at=_utcnow(),
     )
 
 

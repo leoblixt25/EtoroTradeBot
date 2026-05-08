@@ -2,6 +2,10 @@ import structlog
 import random
 from datetime import datetime, timedelta, timezone
 from typing import List
+
+
+def _utcnow() -> datetime:
+    return datetime.now(timezone.utc).replace(tzinfo=None)
 from sqlalchemy import select, desc, func as sa_func
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -137,7 +141,7 @@ class AlertsService:
                     Alert.portfolio_id == portfolio_id,
                     Alert.type == "drawdown",
                     Alert.title == title,
-                    Alert.created_at >= datetime.now(timezone.utc) - timedelta(days=1),
+                    Alert.created_at >= _utcnow() - timedelta(days=1),
                 )
                 exists_result = await self.db.execute(exists_stmt)
                 if exists_result.scalar_one_or_none() is None:
@@ -278,7 +282,7 @@ class AlertsService:
         alert = await self.create_alert(
             portfolio_id=portfolio_id,
             alert_type="weekly_summary",
-            title=f"Weekly Summary - {datetime.now(timezone.utc).strftime('%b %d, %Y')}",
+            title=f"Weekly Summary - {_utcnow().strftime('%b %d, %Y')}",
             message=message,
             severity="info",
         )
