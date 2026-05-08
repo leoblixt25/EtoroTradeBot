@@ -117,6 +117,18 @@ class EtoroClient:
         data = await self._get("/trading/info/portfolio")
         if isinstance(data, dict):
             cp = data.get("clientPortfolio", {})
+
+            # DEBUG: log ALL scalar fields from clientPortfolio
+            scalar_fields = {k: v for k, v in cp.items() if not isinstance(v, (list, dict))}
+            scalar_fields["positions_count"] = len(cp.get("positions", []) or [])
+            scalar_fields["mirrors_count"] = len(cp.get("mirrors", []) or [])
+            scalar_fields["orders_count"] = len(cp.get("orders", []) or [])
+            scalar_fields["ordersForOpen_count"] = len(cp.get("ordersForOpen", []) or [])
+            # Also log any equity/value-related top-level response fields
+            top_scalar = {k: v for k, v in data.items() if not isinstance(v, (list, dict)) and any(x in k.lower() for x in ['equity', 'value', 'balance', 'cash', 'total', 'pnl'])}
+            if top_scalar:
+                scalar_fields["_top"] = str(top_scalar)
+            logger.info("etoro raw portfolio fields", **scalar_fields)
             positions = cp.get("positions", []) or []
             mirrors = cp.get("mirrors", []) or []
             orders = cp.get("orders", []) or []
@@ -161,6 +173,22 @@ class EtoroClient:
 
             # Equity = Available Cash + Total Invested + Unrealized PnL
             equity = available_cash + total_invested + unrealized_pnl
+
+            # DEBUG: log formula intermediates
+            logger.info("etoro formula breakdown",
+                credit=credit,
+                bonus_credit=bonus_credit,
+                pending_manual=pending_manual,
+                pending_orders=pending_orders,
+                available_cash=round(available_cash, 2),
+                pos_amounts=round(pos_amounts, 2),
+                mirror_pos_amounts=round(mirror_pos_amounts, 2),
+                mirror_adjusted=round(mirror_adjusted, 2),
+                ext_costs=round(ext_costs, 2),
+                total_invested=round(total_invested, 2),
+                unrealized_pnl=round(unrealized_pnl, 2),
+                equity=round(equity, 2),
+            )
 
             return {
                 "totalValue": round(equity, 2),

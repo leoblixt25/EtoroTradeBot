@@ -149,12 +149,16 @@ async def internal_error_handler(request: Request, exc):
 app.include_router(api_router)
 
 
+GIT_COMMIT = "6dbfcbd"
+
+
 @app.get("/health", response_model=dict)
 async def health_check():
     return {
         "status": "ok",
         "app_name": settings.APP_NAME,
         "version": "1.0.0",
+        "commit": GIT_COMMIT,
         "paper_trading": settings.PAPER_TRADING,
         "automation_enabled": settings.ENABLE_AUTOMATION,
         "timestamp": time.time(),
